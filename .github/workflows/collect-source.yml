@@ -36,7 +36,7 @@ jobs:
           echo "Processing package: $PACKAGE"
           TMP_NAME=$(sed 's/\//%2F/g' <<< "$PACKAGE")
           # TODO: READ_PACKAGES_TOKEN is to debug only
-          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG")
+          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG" || true)
           if [ -n "$VERSION" ]; then
             IMAGE_URI="ghcr.io/open-edge-platform/$PACKAGE:$TAG"
             echo "Found image: $IMAGE_URI"
