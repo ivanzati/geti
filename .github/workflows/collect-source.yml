@@ -28,12 +28,14 @@ jobs:
         TAG: ${{ github.event.inputs.tag }}
       run: |
         # Exclude 'geti/helm/' packages from the list of container packages for source collection
-        PACKAGES=$(gh api -H "Accept: application/vnd.github.v3+json" /orgs/open-edge-platform/packages?package_type=container --jq '.[].name' 2>/dev/null | awk '/^geti\// && !/^geti\/helm\//')
+        # TODO: READ_PACKAGES_TOKEN is to debug only
+        PACKAGES=$(gh api -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.READ_PACKAGES_TOKEN }}" /orgs/open-edge-platform/packages?package_type=container --jq '.[].name' 2>/dev/null | awk '/^geti\// && !/^geti\/helm\//')
         cat /dev/null > images.txt
         for PACKAGE in $PACKAGES; do
           echo "Processing package: $PACKAGE"
           TMP_NAME=$(sed 's/\//%2F/g' <<< "$PACKAGE")
-          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG")
+          # TODO: READ_PACKAGES_TOKEN is to debug only
+          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.READ_PACKAGES_TOKEN }}" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG")
           if [ -n "$VERSION" ]; then
             IMAGE_URI="ghcr.io/open-edge-platform/$PACKAGE:$TAG"
             echo "Found image: $IMAGE_URI"
@@ -54,7 +56,7 @@ jobs:
       contents: read
     steps:
     - name: Collect source code
-      uses: open-edge-platform/geti-ci/actions/collect_source@a99c99d09285f5920855ee773031e487ad34fa57
+      uses: open-edge-platform/geti-ci/actions/collect-source@550cdd25bd9d593ef30d8d9e329fd9c660f5213b
       with:
         images: ${{ needs.collect-images-list.outputs.images }}
         archive-name: ${{ github.event.inputs.archive-name }}
