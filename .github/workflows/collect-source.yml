@@ -44,7 +44,7 @@ jobs:
             echo "No image with tag '$TAG' found in package '$PACKAGE'"
           fi
         done
-        echo "ECR images with tag '$TAG':"
+        echo "Images with tag '$TAG':"
         cat images.txt
         IMAGES=$(tr '\n' ',' < images.txt | sed 's/,$//')
         echo "images=$IMAGES" >> $GITHUB_ENV
@@ -56,7 +56,7 @@ jobs:
       contents: read
     steps:
     - name: Collect source code
-      uses: open-edge-platform/geti-ci/actions/collect-source@550cdd25bd9d593ef30d8d9e329fd9c660f5213b
+      uses: open-edge-platform/geti-ci/actions/collect_source@550cdd25bd9d593ef30d8d9e329fd9c660f5213b
       with:
         images: ${{ needs.collect-images-list.outputs.images }}
         archive-name: ${{ github.event.inputs.archive-name }}
