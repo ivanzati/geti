@@ -29,13 +29,13 @@ jobs:
       run: |
         # Exclude 'geti/helm/' packages from the list of container packages for source collection
         # TODO: READ_PACKAGES_TOKEN is to debug only
-        PACKAGES=$(gh api -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.READ_PACKAGES_TOKEN }}" /orgs/open-edge-platform/packages?package_type=container --jq '.[].name' 2>/dev/null | awk '/^geti\// && !/^geti\/helm\//')
+        PACKAGES=$(gh api -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.READ_PACKAGES_TOKEN }}" /orgs/open-edge-platform/packages?package_type=container --jq '.[].name' | awk '/^geti\// && !/^geti\/helm\//')
         cat /dev/null > images.txt
         for PACKAGE in $PACKAGES; do
           echo "Processing package: $PACKAGE"
           TMP_NAME=$(sed 's/\//%2F/g' <<< "$PACKAGE")
           # TODO: READ_PACKAGES_TOKEN is to debug only
-          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.READ_PACKAGES_TOKEN }}" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG")
+          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" -H "Authorization: Bearer ${{ secrets.READ_PACKAGES_TOKEN }}" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' | grep -w "$TAG")
           if [ -n "$VERSION" ]; then
             IMAGE_URI="ghcr.io/open-edge-platform/$PACKAGE:$TAG"
             echo "Found image: $IMAGE_URI"
