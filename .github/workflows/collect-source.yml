@@ -1,0 +1,61 @@
+name: Collect source for GPL/MPL licensed code
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to filter images"
+        required: true
+      archive-name:
+        description: "File name to store the archived source code"
+        required: true
+      output-dir:
+        description: "Path to store temporarily the downloaded source code"
+        required: false
+        default: "output"
+ 
+jobs:
+  collect-images-list:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      images: ${{ steps.prepare-images-list.outputs.images }}
+    steps:
+    - name: Prepare list of images from ghcr.io/open-edge-platform/geti
+      id: prepare-images-list
+      env:
+        TAG: ${{ github.event.inputs.tag }}
+      run: |
+        # Exclude 'geti/helm/' packages from the list of container packages for source collection
+        PACKAGES=$(gh api -H "Accept: application/vnd.github.v3+json" /orgs/open-edge-platform/packages?package_type=container --jq '.[].name' 2>/dev/null | awk '/^geti\// && !/^geti\/helm\//')
+        cat /dev/null > images.txt
+        for PACKAGE in $PACKAGES; do
+          echo "Processing package: $PACKAGE"
+          TMP_NAME=$(sed 's/\//%2F/g' <<< "$PACKAGE")
+          VERSION=$(gh api -H "Accept: application/vnd.github.v3+json" /orgs/open-edge-platform/packages/container/$TMP_NAME/versions --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG")
+          if [ -n "$VERSION" ]; then
+            IMAGE_URI="ghcr.io/open-edge-platform/$PACKAGE:$TAG"
+            echo "Found image: $IMAGE_URI"
+            echo "$IMAGE_URI" >> images.txt
+          else
+            echo "No image with tag '$TAG' found in package '$PACKAGE'"
+          fi
+        done
+        echo "ECR images with tag '$TAG':"
+        cat images.txt
+        IMAGES=$(tr '\n' ',' < images.txt | sed 's/,$//')
+        echo "images=$IMAGES" >> $GITHUB_ENV
+
+  collect-source:
+    runs-on: ubuntu-latest
+    needs: collect-images-list
+    permissions:
+      contents: read
+    steps:
+    - name: Collect source code
+      uses: open-edge-platform/geti-ci/actions/collect_source@a99c99d09285f5920855ee773031e487ad34fa57
+      with:
+        images: ${{ needs.collect-images-list.outputs.images }}
+        archive-name: ${{ github.event.inputs.archive-name }}
+        output-dir: ${{ github.event.inputs.output-dir }}
