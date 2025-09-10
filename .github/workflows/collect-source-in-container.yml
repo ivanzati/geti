@@ -21,11 +21,13 @@ jobs:
       image: debian:12.8
     steps:
     - name: Add apt sources for deb-src
+      shell: bash
       run: |
         sed -Ei "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/debian.sources
         apt-get update
 
     - name: Find GPL/MPL licensed packages
+      shell: bash
       env:
         PACKAGES: ${{ inputs.packages }}
       run: |
