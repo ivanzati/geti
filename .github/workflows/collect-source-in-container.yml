@@ -1,0 +1,64 @@
+name: Collect Source Code Archive
+
+on:
+  workflow_call:
+    inputs:
+      packages:
+        description: 'Comma-separated list of packages to install and gather source code'
+        required: true
+        default: ''
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Comma-separated list of packages to install and gather source code'
+        required: true
+        default: ''
+
+jobs:
+  collect-source-code:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:12.8
+    steps:
+    - name: Add apt sources for deb-src
+      run: |
+        sed -Ei "s/^Types: deb$/Types: deb deb-src/" /etc/apt/sources.list.d/debian.sources
+        apt-get update
+
+    - name: Find GPL/MPL licensed packages
+      env:
+        PACKAGES: ${{ github.event.inputs.packages }}
+      run: |
+        OUTPUT_DIR="output"
+        ARCHIVE_NAME="source_code.tar.gz"
+        mkdir -p "$OUTPUT_DIR"
+        # Split comma-separated list into an array
+        IFS=',' read -r -a PACKAGES_ARR <<< "$PACKAGES"
+        # Collect missing packages
+        MISSING_PACKAGES=()
+        for PACKAGE in "${PACKAGES_ARR[@]}"; do
+          if ! dpkg -s "$PACKAGE" >/dev/null 2>&1; then
+            MISSING_PACKAGES+=("$PACKAGE")
+          fi
+        done
+        # Install all missing packages at once
+        if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
+          apt-get update
+          apt-get install -y "${MISSING_PACKAGES[@]}"
+        fi
+        # Process each package
+        for PACKAGE in "${PACKAGES_ARR[@]}"; do
+          echo "Processing package: $PACKAGE"
+            if grep -q -e GPL -e MPL /usr/share/doc/$PACKAGE/copyright; then
+            if grep -l -e GPL -e MPL /usr/share/doc/$PACKAGE/copyright >/dev/null; then
+                apt-get source -q --download-only -d "$OUTPUT_DIR" "$PACKAGE"
+            fi
+          fi
+        done
+        tar -czf "$ARCHIVE_NAME" -C "$OUTPUT_DIR" .
+
+    - name: Upload source code archive
+      uses: actions/upload-artifact@v4  # v4
+      with:
+        name: source-code-archive
+        path: source_code.tar.gz
