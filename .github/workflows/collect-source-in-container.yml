@@ -6,7 +6,7 @@ on:
       packages:
         description: 'Comma-separated list of packages to install and gather source code'
         required: true
-        default: ''
+        type: string
   workflow_dispatch:
     inputs:
       packages:
@@ -27,7 +27,7 @@ jobs:
 
     - name: Find GPL/MPL licensed packages
       env:
-        PACKAGES: ${{ github.event.inputs.packages }}
+        PACKAGES: ${{ inputs.packages }}
       run: |
         OUTPUT_DIR="output"
         ARCHIVE_NAME="source_code.tar.gz"
@@ -46,19 +46,26 @@ jobs:
           apt-get update
           apt-get install -y "${MISSING_PACKAGES[@]}"
         fi
-        # Process each package
+        # Collect GPL/MPL packages
+        GPL_MPL_PACKAGES=()
         for PACKAGE in "${PACKAGES_ARR[@]}"; do
           echo "Processing package: $PACKAGE"
-            if grep -q -e GPL -e MPL /usr/share/doc/$PACKAGE/copyright; then
-            if grep -l -e GPL -e MPL /usr/share/doc/$PACKAGE/copyright >/dev/null; then
-                apt-get source -q --download-only -d "$OUTPUT_DIR" "$PACKAGE"
-            fi
+          if [ -f /usr/share/doc/$PACKAGE/copyright ] && grep -q -e GPL -e MPL /usr/share/doc/$PACKAGE/copyright; then
+            GPL_MPL_PACKAGES+=("$PACKAGE")
           fi
         done
-        tar -czf "$ARCHIVE_NAME" -C "$OUTPUT_DIR" .
-
-    - name: Upload source code archive
-      uses: actions/upload-artifact@v4  # v4
-      with:
-        name: source-code-archive
-        path: source_code.tar.gz
+        # Download sources for GPL/MPL packages individually with error handling
+        if [ ${#GPL_MPL_PACKAGES[@]} -gt 0 ]; then
+          for PKG in "${GPL_MPL_PACKAGES[@]}"; do
+            echo "Downloading source for $PKG"
+            if ! apt-get source -q --download-only -d "$OUTPUT_DIR" "$PKG"; then
+              echo "Warning: Source not available for $PKG" >&2
+            fi
+          done
+        fi
+          tar -czf "$ARCHIVE_NAME" -C "$OUTPUT_DIR" .
+      - name: Upload source code archive
+        uses: actions/upload-artifact@v4  # v4
+        with:
+          name: source-code-archive
+          path: source_code.tar.gz
