@@ -37,9 +37,10 @@ jobs:
         cd "$OUTPUT_DIR"
         # Split comma-separated list into an array
         IFS=',' read -r -a PACKAGES_ARR <<< "$PACKAGES"
+        # Collect missing packages
         # Download sources for GPL/MPL packages individually with error handling
-        if [ ${#GPL_MPL_PACKAGES[@]} -gt 0 ]; then
-          for PKG in "${GPL_MPL_PACKAGES[@]}"; do
+        if [ ${#PACKAGES_ARR[@]} -gt 0 ]; then
+          for PKG in "${PACKAGES_ARR[@]}"; do
             echo "Downloading source for $PKG"
             if ! apt-get source -q --download-only "$PKG"; then
               echo "Warning: Source not available for $PKG" >&2
