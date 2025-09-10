@@ -34,6 +34,7 @@ jobs:
         OUTPUT_DIR="output"
         ARCHIVE_NAME="source_code.tar.gz"
         mkdir -p "$OUTPUT_DIR"
+        cd "$OUTPUT_DIR"
         # Split comma-separated list into an array
         IFS=',' read -r -a PACKAGES_ARR <<< "$PACKAGES"
         # Collect missing packages
@@ -60,11 +61,12 @@ jobs:
         if [ ${#GPL_MPL_PACKAGES[@]} -gt 0 ]; then
           for PKG in "${GPL_MPL_PACKAGES[@]}"; do
             echo "Downloading source for $PKG"
-            if ! apt-get source -q --download-only -d "$OUTPUT_DIR" "$PKG"; then
+            if ! apt-get source -q --download-only "$PKG"; then
               echo "Warning: Source not available for $PKG" >&2
             fi
           done
         fi
+        cd ..
         tar -czf "$ARCHIVE_NAME" -C "$OUTPUT_DIR" .
 
     - name: Upload source code archive
