@@ -37,26 +37,6 @@ jobs:
         cd "$OUTPUT_DIR"
         # Split comma-separated list into an array
         IFS=',' read -r -a PACKAGES_ARR <<< "$PACKAGES"
-        # Collect missing packages
-        MISSING_PACKAGES=()
-        for PACKAGE in "${PACKAGES_ARR[@]}"; do
-          if ! dpkg -s "$PACKAGE" >/dev/null 2>&1; then
-            MISSING_PACKAGES+=("$PACKAGE")
-          fi
-        done
-        # Install all missing packages at once
-        if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
-          apt-get update
-          apt-get install -y "${MISSING_PACKAGES[@]}"
-        fi
-        # Collect GPL/MPL packages
-        GPL_MPL_PACKAGES=()
-        for PACKAGE in "${PACKAGES_ARR[@]}"; do
-          echo "Processing package: $PACKAGE"
-          if [ -f /usr/share/doc/$PACKAGE/copyright ] && grep -q -e GPL -e MPL /usr/share/doc/$PACKAGE/copyright; then
-            GPL_MPL_PACKAGES+=("$PACKAGE")
-          fi
-        done
         # Download sources for GPL/MPL packages individually with error handling
         if [ ${#GPL_MPL_PACKAGES[@]} -gt 0 ]; then
           for PKG in "${GPL_MPL_PACKAGES[@]}"; do
