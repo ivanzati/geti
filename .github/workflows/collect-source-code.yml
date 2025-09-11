@@ -110,7 +110,7 @@ jobs:
         run: |
           cat all-pkg_list/* | sort -u > merged_unique.txt
           cat merged_unique.txt
-          awk 'ORS=","{print}' merged_unique.txt | sed 's/,$//' > merged_unique_oneline.txt
+          awk 'ORS=","{print}' merged_unique.txt | sed 's/,$//' > unique_package_names_oneline.txt
           echo "unique_package_names_oneline=$(cat unique_package_names_oneline.txt)" >> $GITHUB_OUTPUT
 
   download-source-code:
