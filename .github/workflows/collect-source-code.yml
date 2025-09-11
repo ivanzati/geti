@@ -89,10 +89,13 @@ jobs:
     needs:
       - collect-images-list
       - collect-packages-names
+    outputs:
+      unique_package_names_oneline: ${{ steps.transform-list.outputs.unique_package_names_oneline }}
     steps:
       # Create directory first
       - name: Create results directory
         run: mkdir -p all-pkg_list
+
       # Download all reports
       - name: Download all reports
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
@@ -102,43 +105,16 @@ jobs:
           path: all-pkg_list
 
       - name: Get unique names
+        id: transform-list
         shell: bash
         run: |
           cat all-pkg_list/* | sort -u > merged_unique.txt
+          cat merged_unique.txt
+          awk 'ORS=","{print}' merged_unique.txt | sed 's/,$//' > merged_unique_oneline.txt
+          echo "unique_package_names_oneline=$(cat unique_package_names_oneline.txt)" >> $GITHUB_OUTPUT
 
-      - name: Upload list
-        uses: actions/upload-artifact@v4
-        with:
-          name: all_merged_unique
-          path: merged_unique.txt
-          retention-days: 7
-
-  download-source-code:
-    runs-on: ubuntu-latest
-    needs:
-      - collect-images-list
-      - collect-packages-names
-      - get-unique-names
-    steps:
-      # Create directory first
-      - name: Create directory
-        run: mkdir -p unique-pkg_list
-
-      # Download merged_unique.txt
-      - name: Download merged_unique
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
-        with:
-          pattern: "all_merged_unique"
-          merge-multiple: true
-          path: unique-pkg_list
-
-      - name: Transform list to a single line
-        shell: bash
-        run: |
-          tr '\n' ',' < unique-pkg_list/merged_unique.txt | sed 's/,$//' > unique-pkg_list/merged_unique_oneline.txt
-          cat unique-pkg_list/merged_unique_oneline.txt
-
-      - name: Call collect-source-in-container workflow
-        uses: ./.github/workflows/collect-source-in-container.yml
-        with:
-          package_list: unique-pkg_list/merged_unique_oneline.txt
+    download-source-code:
+      needs: get-unique-names
+      uses: ./.github/workflows/collect-source-in-container.yml
+      with:
+        package_list: unique_package_names_oneline.txt
