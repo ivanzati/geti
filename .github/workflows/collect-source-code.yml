@@ -1,0 +1,144 @@
+name: Collect source for GPL/MPL licensed code (combined)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to filter images, e.g. '2.13.0-d90fa913'"
+        required: true
+        default: 2.13.0-d90fa913
+
+permissions: {} # No permissions by default on workflow level
+
+jobs:
+  collect-images-list:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.collect-images-list.outputs.images_json }}
+    steps:
+      - name: Prepare list of images from ghcr.io
+        id: collect-images-list
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+          # need to use classic PAT, https://github.com/cli/cli/issues/9606
+          GH_TOKEN: ${{ secrets.READ_PACKAGES_TOKEN }}
+        run: |
+          # Get all container images and
+          # exclude 'geti/helm/' packages from the list of container packages for source collection
+          PACKAGES=$(gh api -H "Accept: application/vnd.github.v3+json" \
+                            /orgs/open-edge-platform/packages?package_type=container  \
+                            --jq '.[].name' 2>/dev/null | awk '/^geti\// && !/^geti\/helm\//')
+
+          # Retrieve container images with specified input tag
+          for PACKAGE in $PACKAGES; do
+            echo "Processing package: $PACKAGE"
+            TMP_NAME=$(sed 's/\//%2F/g' <<< "$PACKAGE")
+            VERSION=$(gh api -H "Accept: application/vnd.github.v3+json"  \
+                             /orgs/open-edge-platform/packages/container/$TMP_NAME/versions  \
+                             --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -w "$TAG" || true)
+
+            if [ -n "$VERSION" ]; then
+              IMAGE_URI="ghcr.io/open-edge-platform/$PACKAGE:$TAG"
+              echo "Found image: $IMAGE_URI"
+              echo \"$IMAGE_URI\" >> images.txt
+            else
+              echo "No image with tag '$TAG' found in package '$PACKAGE'"
+            fi
+          done
+          echo "Images with tag '$TAG':"
+          cat images.txt
+
+          # Prepare JSON to use in matrix strategy
+          IMAGES=[$(tr '\n' ',' < images.txt | sed 's/,$//')]
+          echo "images_json=$(jq -cn --argjson image "$IMAGES" '{target: $image}')" >> $GITHUB_OUTPUT
+
+  collect-packages-names:
+    needs: collect-images-list
+    timeout-minutes: 660
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.collect-images-list.outputs.images) }}
+      fail-fast: false
+    steps:
+      - name: Scan ${{ matrix.target }}
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          # install Syft
+          curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+          NAME=$(echo "$TARGET" | cut -d'/' -f 4 | cut -d':' -f 1)
+          echo "name=$NAME" >> $GITHUB_ENV
+
+          syft "$TARGET" -o json |
+          jq -r '[
+            .artifacts[] |
+            select(.type == "deb" and (.licenses[].value | test("GPL|AGPL|LGPL|EPL|MPL"; "i"))) |
+            .name
+          ] | unique[]' > pkg_list_$NAME.txt
+
+      - name: Upload packages list
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg_list_${{ env.name }}
+          path: pkg_list_*
+          retention-days: 5
+
+  get-unique-names:
+    runs-on: ubuntu-latest
+    needs:
+      - collect-images-list
+      - collect-packages-names
+    steps:
+      # Create directory first
+      - name: Create results directory
+        run: mkdir -p all-pkg_list
+      # Download all reports
+      - name: Download all reports
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: "pkg_list_*"
+          merge-multiple: true
+          path: all-pkg_list
+
+      - name: Get unique names
+        shell: bash
+        run: |
+          cat all-pkg_list/* | sort -u > merged_unique.txt
+
+      - name: Upload list
+        uses: actions/upload-artifact@v4
+        with:
+          name: all_merged_unique
+          path: merged_unique.txt
+          retention-days: 7
+
+  download-source-code:
+    runs-on: ubuntu-latest
+    needs:
+      - collect-images-list
+      - collect-packages-names
+      - get-unique-names
+    steps:
+      # Create directory first
+      - name: Create directory
+        run: mkdir -p unique-pkg_list
+
+      # Download merged_unique.txt
+      - name: Download merged_unique
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: "all_merged_unique"
+          merge-multiple: true
+          path: unique-pkg_list
+
+      - name: Transform list to a single line
+        shell: bash
+        run: |
+          tr '\n' ',' < unique-pkg_list/merged_unique.txt | sed 's/,$//' > unique-pkg_list/merged_unique_oneline.txt
+          cat unique-pkg_list/merged_unique_oneline.txt
+
+      - name: Call collect-source-in-container workflow
+        uses: ./.github/workflows/collect-source-in-container.yml
+        with:
+          package_list: unique-pkg_list/merged_unique_oneline.txt
