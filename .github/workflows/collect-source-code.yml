@@ -117,4 +117,4 @@ jobs:
     needs: get-unique-names
     uses: ./.github/workflows/collect-source-in-container.yml
     with:
-      package_list: ${{ needs.get-unique-names.outputs.unique_package_names_oneline }}
+      packages: ${{ needs.get-unique-names.outputs.unique_package_names_oneline }}
