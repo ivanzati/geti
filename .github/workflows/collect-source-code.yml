@@ -113,8 +113,8 @@ jobs:
           awk 'ORS=","{print}' merged_unique.txt | sed 's/,$//' > merged_unique_oneline.txt
           echo "unique_package_names_oneline=$(cat unique_package_names_oneline.txt)" >> $GITHUB_OUTPUT
 
-    download-source-code:
-      needs: get-unique-names
-      uses: ./.github/workflows/collect-source-in-container.yml
-      with:
-        package_list: unique_package_names_oneline.txt
+  download-source-code:
+    needs: get-unique-names
+    uses: ./.github/workflows/collect-source-in-container.yml
+    with:
+      package_list: ${{ needs.get-unique-names.outputs.unique_package_names_oneline }}
