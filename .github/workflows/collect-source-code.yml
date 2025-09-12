@@ -82,6 +82,7 @@ jobs:
         with:
           name: pkg_list_${{ env.name }}
           path: pkg_list_*
+          overwrite: true
           retention-days: 5
 
   get-unique-names:
