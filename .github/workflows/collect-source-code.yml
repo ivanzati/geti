@@ -67,7 +67,7 @@ jobs:
         run: |
           # install Syft
           curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
-          NAME=$(awk -F'[/:]' '{print $5}' <<< "$TARGET")
+          NAME=$(echo "$TARGET" | cut -d'/' -f 4 | cut -d':' -f 1)
           echo "name=$NAME" >> $GITHUB_ENV
 
           syft "$TARGET" -o json |
@@ -82,7 +82,6 @@ jobs:
         with:
           name: pkg_list_${{ env.name }}
           path: pkg_list_*
-          overwrite: true
           retention-days: 5
 
   get-unique-names:
