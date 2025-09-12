@@ -67,13 +67,13 @@ jobs:
         run: |
           # install Syft
           curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
-          NAME=$(echo "$TARGET" | cut -d'/' -f 4 | cut -d':' -f 1)
+          NAME=$(awk -F'[/:]' '{print $5}' <<< "$TARGET")
           echo "name=$NAME" >> $GITHUB_ENV
 
           syft "$TARGET" -o json |
           jq -r '[
             .artifacts[] |
-            select(.type == "deb" and (.licenses[].value | test("GPL|AGPL|LGPL|EPL|MPL"; "i"))) |
+            select(.type == "deb" and ((.licenses // [])[]?.value | test("GPL|AGPL|LGPL|EPL|MPL"; "i"))) |
             .name
           ] | unique[]' > pkg_list_$NAME.txt
 
@@ -98,7 +98,7 @@ jobs:
 
       # Download all reports
       - name: Download all reports
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@v4
         with:
           pattern: "pkg_list_*"
           merge-multiple: true
@@ -137,14 +137,18 @@ jobs:
         # Split comma-separated list into an array
         IFS=',' read -r -a PACKAGES_ARR <<< "$PACKAGES"
         # Collect missing packages
-        # Download sources for GPL/MPL packages individually with error handling
+        # Install GNU Parallel for faster downloads
+        apt-get update && apt-get install -y parallel
+
+        # Download sources for GPL/MPL packages in parallel with error handling
         if [ ${#PACKAGES_ARR[@]} -gt 0 ]; then
-          for PKG in "${PACKAGES_ARR[@]}"; do
-            echo "Downloading source for $PKG"
-            if ! apt-get source -q --download-only "$PKG"; then
-              echo "Warning: Source not available for $PKG" >&2
+          export OUTPUT_DIR
+          printf "%s\n" "${PACKAGES_ARR[@]}" | parallel --jobs 4 '
+            echo "Downloading source for {}"
+            if ! apt-get source -q --download-only "{}"; then
+              echo "Warning: Source not available for {}" >&2
             fi
-          done
+          '
         fi
         cd ..
         tar -czf "$ARCHIVE_NAME" -C "$OUTPUT_DIR" .
